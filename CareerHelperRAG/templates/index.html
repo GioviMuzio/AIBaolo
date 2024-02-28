@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Interface</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f2f2f2;
+        margin: 0;
+        padding: 0;
+    }
+
+    .chat-container {
+        max-width: 600px;
+        margin: 20px auto;
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .chat-messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 20px;
+        overflow-y: auto;
+        max-height: 300px;
+        border-bottom: 1px solid #ddd;
+        border-radius: 0 0 10px 10px;
+    }
+
+    .message {
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 10px;
+    }
+
+    .user-message {
+        background-color: #e6f2ff;
+        text-align: right;
+    }
+
+    .bot-message {
+        background-color: #f2f2f2;
+        text-align: left;
+    }
+
+    .message p {
+        margin: 5px 0;
+    }
+
+    .timestamp {
+        font-size: 0.8em;
+        color: #888;
+    }
+
+    .chat-input-container {
+        display: flex;
+        align-items: center;
+    }
+
+    .chat-input {
+        width: calc(100% - 100px);
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        box-sizing: border-box;
+        font-size: 14px;
+    }
+
+    .send-button {
+        width: 80px;
+        margin: 10px;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #007bff;
+        color: #fff;
+        cursor: pointer;
+        font-size: 14px;
+    }
+</style>
+</head>
+<body>
+<div class="chat-container">
+    <ul class="chat-messages" id="chat-messages">
+        <!-- Previous messages will go here -->
+    </ul>
+    <div class="chat-input-container">
+        <input type="text" class="chat-input" id="user-input" placeholder="Type your message here...">
+        <button class="send-button" onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+function sendMessage() {
+    var userInput = document.getElementById('user-input');
+    var messageText = userInput.value.trim();
+    if (messageText === '') return;
+
+    var chatMessages = document.getElementById('chat-messages');
+    var newMessage = document.createElement('li');
+    newMessage.classList.add('message', 'user-message');
+    newMessage.innerHTML = `
+        <p>${messageText}</p>
+        <span class="timestamp">${getCurrentTime()}</span>
+    `;
+    chatMessages.appendChild(newMessage);
+
+    // Automatically scroll to the last message
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Send user input to the backend
+    sendUserInput(messageText);
+
+    userInput.value = '';
+}
+
+function sendUserInput(messageText) {
+    fetch('/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ user_input: messageText })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        var chatMessages = document.getElementById('chat-messages');
+        var botMessage = document.createElement('li');
+        botMessage.classList.add('message', 'bot-message');
+        botMessage.innerHTML = `
+            <p>${data.response}</p>
+            <span class="timestamp">${getCurrentTime()}</span>
+        `;
+        chatMessages.appendChild(botMessage);
+
+        // Automatically scroll to the last message
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function getCurrentTime() {
+    var now = new Date();
+    var hours = now.getHours().toString().padStart(2, '0');
+    var minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
+// Add event listener for pressing "Enter" key
+document.getElementById('user-input').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        sendMessage();
+    }
+});
+</script>
+</body>
+</html>
