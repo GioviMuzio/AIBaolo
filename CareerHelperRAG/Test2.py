@@ -6,8 +6,8 @@ import time
 # Initialize Pinecone and OpenAI clients
 pc = Pinecone(api_key="42304d01-e229-41b6-a281-498ef5e8a39f")
 index = pc.Index("merlin")
-client = OpenAI(api_key="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")
-ns = "orientamento"
+client = OpenAI(api_key="")
+ns = "Identity"
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -25,21 +25,35 @@ def text_to_embedding_openai(text):
 
 def embed_chunks_and_save(input_file, output_file):
     # Embed and save data
-    with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w') as outfile:
+    with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', encoding='utf-8') as outfile:
         for line in infile:
             line = line.strip()  # Remove leading/trailing whitespace
             if line:  # Skip empty lines
+                # Check if the delimiter is present in the line
+                if '/nome_metadato' in line:
+                    # Split the line into text and metadata
+                    text, metadata = line.split('/nome_metadato', 1)
+                    text = text.strip()  # Remove leading/trailing whitespace from text
+                    metadata = metadata.strip()  # Remove leading/trailing whitespace from metadata
+                else:
+                    # If the delimiter is not present, use the entire line as text and set an empty metadata
+                    text = line.strip()
+                    metadata = {}
+
                 # Remove or replace non-ASCII characters from the text
-                sanitized_text = ''.join(char for char in line if ord(char) < 128)
-                # Split the text into chunks (you can adjust chunk size as needed)
-                chunks = [sanitized_text[i:i+300] for i in range(0, len(sanitized_text), 300)]
-                # Embed each chunk individually using OpenAI API
-                for chunk in chunks:
-                    embedding = text_to_embedding_openai(chunk)
-                    if embedding:
-                        # Write original sanitized text and embedding to the output file
-                        outfile.write(f"{chunk}\t{embedding}\n")
+                sanitized_text = ''.join(char for char in text if ord(char) < 128)
+
+                # Embed the sanitized text using OpenAI API
+                embedding = text_to_embedding_openai(sanitized_text)
+                if embedding:
+                    # Write original line and embedding to the output file
+                    outfile.write(f"{text}\t{embedding}\t{metadata}\n")
+
     print("Processing complete. Output saved to", output_file)
+
+
+
+
 
 def create_vectors_for_index(input_file):
     vectors = []
@@ -47,20 +61,37 @@ def create_vectors_for_index(input_file):
         for line in infile:
             line = line.strip()
             if line:
-                text, embedding = line.split('\t')
+                parts = line.split('\t')
+                text = parts[0][:512]  # Truncate 'id' to 512 characters
+                embedding = parts[1]
+                metadata_str = parts[2].strip() if len(parts) > 2 and parts[2].strip() != 'None' else "{}"
+
+                try:
+                    # Attempt to convert the metadata string to a dictionary
+                    metadata = eval(metadata_str)
+                    if not isinstance(metadata, dict):
+                        raise ValueError("Metadata is not a dictionary")
+                except (SyntaxError, ValueError):
+                    # If conversion fails, set metadata to an empty dictionary
+                    metadata = {}
+
                 vector = {
-                    "id": text,
+                    "id": text.encode('ascii', 'ignore').decode(),  # Remove non-ASCII characters
                     "values": [float(value.strip("[]")) for value in embedding.split(",")],
+                    "metadata": metadata,
                 }
                 vectors.append(vector)
     return vectors
+
+
+
 
 def complete_prompt(prompt):
     try:
         completion = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that always answers questions."},
+                {"role": "system", "content": "You are Ai Vtuber Merlin talk in first person"},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -111,8 +142,8 @@ def chat():
             return jsonify({'response': 'Failed to generate OpenAI response.'})
     else:
         prompt_start = (
-            "Answer the question based on the context below.\n\n"+
-            "Context:\n" +
+            "You are Merlin answer the question based on the information received.\n\n"+
+            "information:\n" +
             "\n---\n".join(contexts)
         )
         prompt_end = (
